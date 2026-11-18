@@ -1,0 +1,45 @@
+# Змейка по графику активности: обновляется дважды в день и кладётся в ветку output.
+name: Змейка
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: Platane/snk@v3
+        with:
+          github_user_name: ${{ github.repository_owner }}
+          outputs: |
+            dist/github-snake.svg?color_snake=#FF8284
+            dist/github-snake-dark.svg?palette=github-dark&color_snake=#FF8284
+      # Обрезаем картинку ровно по сетке, чтобы змейка не выползала за квадратики
+      - name: Обрезать по сетке
+        shell: python
+        run: |
+          import re, glob, os
+          os.makedirs("out", exist_ok=True)
+          for f in glob.glob("dist/*.svg"):
+              s = open(f, encoding="utf-8").read()
+              cells = re.findall(r'<rect class="c" x="([\d.]+)" y="([\d.]+)"', s)
+              w = max(float(x) for x, _ in cells) + 14
+              h = max(float(y) for _, y in cells) + 14
+              s = re.sub(r'viewBox="[^"]*" width="[^"]*" height="[^"]*"',
+                         f'viewBox="0 0 {w:g} {h:g}" width="{w:g}" height="{h:g}"', s, count=1)
+              open(os.path.join("out", os.path.basename(f)), "w", encoding="utf-8").write(s)
+      - uses: crazy-max/ghaction-github-pages@v4
+        with:
+          target_branch: output
+          build_dir: out
+          commit_message: Обновить змейку
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
